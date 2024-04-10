@@ -1,0 +1,301 @@
+# Copyright (C) 2023 sbom2doc contributors
+# SPDX-License-Identifier: Apache-2.0
+
+import requests
+from lib4sbom.data.document import SBOMDocument
+from lib4sbom.license import LicenseScanner
+
+from sbom2doc.docbuilder.consolebuilder import ConsoleBuilder
+from sbom2doc.docbuilder.jsonbuilder import JSONBuilder
+from sbom2doc.docbuilder.markdownbuilder import MarkdownBuilder
+from sbom2doc.docbuilder.pdfbuilder import PDFBuilder
+
+
+license_syns = {
+    "Apache-2.0": [
+        "https://www.apache.org/licenses/LICENSE-2.0;description=Apache-2.0",
+        "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        "http://www.apache.org/licenses/LICENSE-2.0.txt",
+        "https://www.apache.org/licenses/LICENSE-2.0.html",
+        "https://www.apache.org/licenses/LICENSE-2.0",
+        "http://www.apache.org/licenses/LICENSE-2.0.html;"
+        "description=Apache 2.0 License",
+        "Apache-2.0 license",
+        '"Apache License 2.0";link="http://www.apache.org/licenses/LICENSE-2.0.html"',
+    ],
+    "BSD-3-Clause": [
+        "https://opensource.org/licenses/BSD-3-Clause",
+        "3-Clause BSD License",
+    ],
+    "BSD-2-Clause": [
+        "https://opensource.org/licenses/BSD-2-Clause",
+        "https://opensource.org/licenses/BSD-2-Clause;description=BSD 2-Clause License",
+    ],
+    "ZPL-2.1": [
+        "ZPL 2.1",
+        "BSD 3-Clause",
+        "BSD 3-Clause License",
+    ],
+}
+license_syns_reverse = {}
+for k, v in license_syns.items():
+    for kk in v:
+        license_syns_reverse[kk] = k
+
+
+def _ensure_len(text, max_len):
+    if max_len < 3:
+        raise Exception("At least 3 min length! Better 10...")
+    if text is not None:
+        text = str(text)
+        if len(text) > max_len:
+            text = f"{text[:(max_len - 3)]}..."
+    return text
+
+
+def _get_license_or_copyright(o):
+    copyright = o.get("copyrighttext", "NOT KNOWN")
+    license = o.get("licenseconcluded", "NOT KNOWN")
+    if license == "NOT KNOWN" and copyright != "NOT KNOWN":
+        license = copyright
+    return license
+
+
+def generate_document(
+    format, sbom_parser, filename, outfile, include_license, debug=False
+):
+    # Get constituent components of the SBOM
+    packages = sbom_parser.get_packages()
+    files = sbom_parser.get_files()
+    relationships = sbom_parser.get_relationships()
+    document = SBOMDocument()
+    document.copy_document(sbom_parser.get_document())
+    license_info = LicenseScanner()
+
+    def _find_license_id(value):
+        """
+        Uses the LicenseScanner and own synonyms.
+        Returns LicenseScanner.DEFAULT_LICENSE if nothing found.
+        """
+        if value in license_syns_reverse:
+            return license_syns_reverse[value]
+        return license_info.find_license_id(value)
+
+    # Select document builder based on format
+    if format == "markdown":
+        sbom_document = MarkdownBuilder()
+    elif format == "json":
+        sbom_document = JSONBuilder()
+    elif format == "pdf":
+        sbom_document = PDFBuilder()
+    else:
+        sbom_document = ConsoleBuilder()
+
+    sbom_document.heading(1, "SBOM Summary")
+
+    # creator_identified = False
+    # creator = document.get_creator()
+    # # If creator is missing, will return None
+    # if creator is not None:
+    #     for c in creator:
+    #         creator_identified = True
+    #         sbom_document.addrow(["Creator", f"{c[0]}:{c[1]}"])
+
+    sbom_document.paragraph(
+        f"""SBOM File: {filename}
+SBOM Type: {document.get_type()}
+Version: {document.get_version()}
+Name: {document.get_name()}
+Created: {document.get_created()}
+Files: {str(len(files))}
+Packages: {str(len(packages))}
+Relationships: {str(len(relationships))}"""
+    )
+
+    files_valid = True
+    packages_valid = True
+    relationships_valid = len(relationships) > 0
+    sbom_licenses = []
+    sbom_components = []
+    sbom_suppliers = []
+
+    for package in packages:
+        license = _get_license_or_copyright(package)
+        sbom_licenses.append(license)
+    for f in files:
+        license = _get_license_or_copyright(f)
+        sbom_licenses.append(license)
+
+    freq = {}
+    for items in sorted(sbom_licenses):
+        freq[items] = sbom_licenses.count(items)
+
+    if debug:
+        freq_sorted = [(f, license) for license, f in freq.items()]
+        freq_sorted = sorted(freq_sorted, key=lambda x: x[0], reverse=True)
+        print("License information:")
+        for f, license in freq_sorted:
+            print(f"{f} times: {_ensure_len(license, 200)} END")
+
+    licenses_by_id = {}
+    for k in freq.keys():
+        k = str(k)
+        license_text = None
+        if len(k) > 200 and "\n" in k:
+            # just assume that it is the license_text at this length with newlines
+            license_text = k
+
+        elif license_info.license_expression(k):
+            print(f"WARNING: License expression found, not really supported: {k}")
+
+        resolved = _find_license_id(k)
+        if license_info.DEFAULT_LICENSE != resolved and resolved != k:
+            if debug:
+                print(f"Resolved {_ensure_len(k, 20)} with {resolved}")
+            k = resolved
+
+        if k in licenses_by_id:
+            existing_text = licenses_by_id[k]["license_text"]
+            if license_text is not None and existing_text is not None:
+                if license_text != existing_text:
+                    if debug:
+                        print(
+                            "Conflict between two different versions "
+                            f"for license id {k}! "
+                            f"ONE {license_text}\nTWO: {existing_text} END"
+                        )
+                    else:
+                        print(
+                            "Conflict between two different versions for "
+                            f"license id {k}! Check with debug."
+                        )
+
+            if existing_text is not None:
+                license_text = existing_text
+
+        licenses_by_id[k] = {"id": k, "license_text": license_text}
+
+    if include_license:
+        for key, value in licenses_by_id.items():
+            # Ignore undefined licenses or expressions
+            if key == "NOASSERTION":
+                continue
+            if value["license_text"] is not None:
+                continue  # has text already
+            if len(key) > 200:
+                if debug:
+                    print(
+                        "Ignore long license key when getting texts, "
+                        f"length: {len(key)}"
+                    )
+                continue
+            if license_info.license_expression(key):
+                if debug:
+                    print(f"Ignore license expression when getting text: {key}")
+                continue
+
+            key_stripped = key.strip()
+            if " " in key_stripped:
+                if debug:
+                    print(
+                        "Ignore license id with space when "
+                        f"querying spdx text: {key_stripped}"
+                    )
+                continue
+
+            if key_stripped.startswith("http"):
+                # assume URL, ignore
+                continue
+
+            license_url = f"https://spdx.org/licenses/{key_stripped}.json"
+            try:
+                license_text = requests.get(license_url).json()
+                if license_text.get("licenseText") is None:
+                    print(
+                        f"No license text found for {key_stripped}: "
+                        "None value for licenseText"
+                    )
+                else:
+                    value["license_text"] = license_text.get("licenseText")
+            except requests.exceptions.RequestException:
+                print(f"No license text found for {key_stripped}: RequestException")
+
+    if len(packages) > 0:
+
+        sbom_document.heading(1, "Package information")
+        # sbom_document.createtable(
+        #    ["Name", "Version", "Type", "Supplier", "License"], [12, 8, 8, 8, 12]
+        # )
+        for package in packages:
+            # Minimum elements are ID, Name, Version, Supplier
+            id = package.get("id", None)
+            name = package.get("name", None)
+            version = package.get("version", None)
+            type = package.get("type", None)
+            supplier = package.get("supplier", None)
+            license = _get_license_or_copyright(package)
+            license_id = _find_license_id(license)
+            sbom_components.append(type)
+            if supplier is not None:
+                sbom_suppliers.append(supplier)
+
+            sbom_document.heading(2, f"Package: {id}")
+            sbom_document.paragraph(
+                f"""ID: {id}
+Name: {name}
+Version: {version}
+Type: {type}
+License id: {_ensure_len(license_id, 50)}
+"""
+            )
+            if include_license:
+                sbom_document.paragraph("License:")
+                paragraph_text = f"No license text for id {license_id}"
+                if (
+                    license_id in licenses_by_id
+                    and "license_text" in licenses_by_id[license_id]
+                ):
+                    license_text = licenses_by_id[license_id]["license_text"]
+                    if license_text is not None:
+                        paragraph_text = license_text
+                sbom_document.paragraph(paragraph_text)
+
+            if (
+                id is None
+                or name is None
+                or version is None
+                or supplier is None
+                or supplier == "NOASSERTION"
+            ):
+                packages_valid = False
+
+    sbom_document.heading(1, "Component Type Summary")
+    sbom_document.createtable(["Type", "Count"], [20, 10])
+    #
+    # Create an empty dictionary
+    freq = {}
+    for items in sorted(sbom_components):
+        freq[items] = sbom_components.count(items)
+    freq_sorted = [(f, comp) for comp, f in freq.items()]
+    freq_sorted = sorted(freq_sorted, key=lambda x: x[0], reverse=True)
+    for key, value in freq_sorted:
+        sbom_document.addrow([str(value), str(key)])
+    sbom_document.showtable(widths=[10, 3])
+
+    # sbom_document.heading(1, "NTIA Summary")
+    # sbom_document.createtable(["Element", "Status"])
+    # sbom_document.addrow(["All file information provided?", str(files_valid)])
+    # sbom_document.addrow(["All package information provided?", str(packages_valid)])
+    # sbom_document.addrow(
+    #     ["Dependency relationships provided?", str(relationships_valid)]
+    # )
+    # sbom_document.showtable(widths=[10, 4])
+
+    # valid_sbom = (
+    #     files_valid
+    #     and packages_valid
+    #     and relationships_valid
+    # )
+    # sbom_document.paragraph(f"NTIA conformant {valid_sbom}")
+
+    sbom_document.publish(outfile)

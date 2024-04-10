@@ -9,6 +9,7 @@ from collections import ChainMap
 from lib4sbom.parser import SBOMParser
 
 import sbom2doc.generator as generator
+import sbom2doc.simple_format_generator as simple_generator
 from sbom2doc.version import VERSION
 
 # CLI processing
@@ -61,6 +62,14 @@ def main(argv=None):
     )
 
     output_group.add_argument(
+        "-s",
+        "--content-structure",
+        action="store",
+        default="full",
+        help="content structure [simple | full] (default: full)",
+    )
+
+    output_group.add_argument(
         "-o",
         "--output-file",
         action="store",
@@ -74,6 +83,7 @@ def main(argv=None):
         "input_file": "",
         "output_file": "",
         "debug": False,
+        "cotent_structure": "full",
         "format": "console",
         "include_license": False,
     }
@@ -99,17 +109,25 @@ def main(argv=None):
         print("Output file", args["output_file"])
         print("Include license text", args["include_license"])
 
+    if args["content_structure"] not in ["full", "simple"]:
+        print("[Error] Unrecognized content structure, use [full | simple].")
+
     sbom_parser = SBOMParser()
     # Load SBOM - will autodetect SBOM type
     try:
         sbom_parser.parse_file(input_file)
 
-        generator.generate_document(
+        g = generator
+        if args["content_structure"] == "simple":
+            g = simple_generator
+
+        g.generate_document(
             args["format"],
             sbom_parser,
             input_file,
             args["output_file"],
             args["include_license"],
+            debug=args["debug"],
         )
 
     except FileNotFoundError:

@@ -12,7 +12,9 @@ from sbom2doc.docbuilder.markdownbuilder import MarkdownBuilder
 from sbom2doc.docbuilder.pdfbuilder import PDFBuilder
 
 
-def generate_document(format, sbom_parser, filename, outfile, include_license):
+def generate_document(
+    format, sbom_parser, filename, outfile, include_license, debug=False
+):
     # Get constituent components of the SBOM
     packages = sbom_parser.get_packages()
     files = sbom_parser.get_files()
