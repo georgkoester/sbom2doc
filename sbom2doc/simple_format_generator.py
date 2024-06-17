@@ -288,7 +288,7 @@ License id(s) or text: {licenses_multiline}
             copyright = _get_copyright(package)
             if copyright is not None and copyright != "NOT KNOWN":
                 sbom_document.paragraph(f"Copyright:")
-                sbom_document.paragraph(copyright)
+                sbom_document.paragraph(copyright, style=sbom_document.small_body)
 
             if (
                 id is None
@@ -315,7 +315,7 @@ License id(s) or text: {licenses_multiline}
                     paragraph_text = license_text
             elif l["id"] not in ["", "NOASSERTION", "UNKNOWN"]:
                 paragraph_text = l["id"]
-            sbom_document.paragraph(paragraph_text)
+            sbom_document.paragraph(paragraph_text, style=sbom_document.small_body)
 
     sbom_document.heading(1, "Component Type Summary")
     sbom_document.createtable(["Type", "Count"], [20, 10])

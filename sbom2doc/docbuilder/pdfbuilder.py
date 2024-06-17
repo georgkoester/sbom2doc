@@ -44,6 +44,8 @@ class PDFBuilder(DocBuilder):
 
     body = PS(name="body", fontSize=12, fontName=document_font, leading=18)
 
+    small_body = PS(name="body", fontSize=9, fontName=document_font, leading=16)
+
     black = colors.black
 
     spacer = ConditionalSpacer(0.25 * cm, 0.25 * cm)
@@ -119,17 +121,20 @@ class PDFBuilder(DocBuilder):
             self.contents.append(Paragraph(title, self.h1))
         self._spacer()
 
-    def paragraph(self, text, replace_angled_brackets=True):
+    def paragraph(self, text, replace_angled_brackets=True, style=None):
         """
         Line breaks preserved if required, and < > are escaped by default since
         reportlab is using them for markup.
         """
+        if style is None:
+            style = self.body
+
         text_elements = text.splitlines()
         for t in text_elements:
             if replace_angled_brackets:
                 t = t.replace("<", "&lt;")
                 t = t.replace(">", "&gt;")
-            self.contents.append(Paragraph(t, self.body))
+            self.contents.append(Paragraph(t, style=style))
             self._spacer()
 
     def _notes_paragraph(self, text):
