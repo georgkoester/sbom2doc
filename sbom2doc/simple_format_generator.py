@@ -247,7 +247,7 @@ Relationships: {str(len(relationships))}"""
                     value["license_text"] = license_text.get("licenseText")
                     license_done = True
             except requests.exceptions.RequestException:
-                print(f"No license text found for {key_stripped}: RequestException")
+                print(f"No license text found in SPDX db for {key_stripped}: RequestException")
 
             if not license_done:
                 if additional_license_texts is not None and key_stripped.upper() in additional_license_texts:
