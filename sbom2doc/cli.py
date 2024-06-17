@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
+import json
+import os
 import sys
 import textwrap
 from collections import ChainMap
@@ -14,6 +16,19 @@ from sbom2doc.version import VERSION
 
 # CLI processing
 
+def parse_additional_license_texts(additional_license_texts_file):
+    additional_license_texts = None
+    try:
+        with open(os.path.abspath(additional_license_texts_file)) as f:
+            additional_license_texts = json.load(f)
+        assert type(additional_license_texts) is dict, "Did not find a JSON object"
+
+        additional_license_texts_caps = {}
+        for k in additional_license_texts:
+            additional_license_texts_caps[k.upper()] = additional_license_texts[k]
+        return additional_license_texts_caps
+    except Exception as e:
+        raise Exception(f"Expected path to JSON file with object, got '{additional_license_texts_file}'") from e
 
 def main(argv=None):
 
@@ -51,6 +66,13 @@ def main(argv=None):
         help="add license text",
     )
 
+    output_group.add_argument(
+        "--additional-license-texts",
+        action="store",
+        default=None,
+        help="Provide a JSON file with an object {LICENSE_ID: 'LICENSE TEXT'} to add license texts for generation.",
+    )
+
     # Add format option
     output_group.add_argument(
         "-f",
@@ -86,6 +108,7 @@ def main(argv=None):
         "cotent_structure": "full",
         "format": "console",
         "include_license": False,
+        "additional_license_texts": None,
     }
 
     raw_args = parser.parse_args(argv[1:])
@@ -116,6 +139,9 @@ def main(argv=None):
     # Load SBOM - will autodetect SBOM type
     try:
         sbom_parser.parse_file(input_file)
+        additional_license_texts=None
+        if args["additional_license_texts"] is not None:
+            additional_license_texts = parse_additional_license_texts(args["additional_license_texts"])
 
         g = generator
         if args["content_structure"] == "simple":
@@ -128,6 +154,7 @@ def main(argv=None):
             args["output_file"],
             args["include_license"],
             debug=args["debug"],
+            additional_license_texts=additional_license_texts
         )
 
     except FileNotFoundError:

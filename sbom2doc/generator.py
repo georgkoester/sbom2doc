@@ -13,7 +13,7 @@ from sbom2doc.docbuilder.pdfbuilder import PDFBuilder
 
 
 def generate_document(
-    format, sbom_parser, filename, outfile, include_license, debug=False
+    format, sbom_parser, filename, outfile, include_license, debug=False, additional_license_texts=None,
 ):
     # Get constituent components of the SBOM
     packages = sbom_parser.get_packages()

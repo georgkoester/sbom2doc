@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import requests
+import os
 from lib4sbom.data.document import SBOMDocument
 from lib4sbom.license import LicenseScanner
 
@@ -26,6 +27,7 @@ license_syns = {
     "BSD-3-Clause": [
         "https://opensource.org/licenses/BSD-3-Clause",
         "3-Clause BSD License",
+        "http://www.eclipse.org/org/documents/edl-v10.php",
     ],
     "BSD-2-Clause": [
         "https://opensource.org/licenses/BSD-2-Clause",
@@ -35,6 +37,9 @@ license_syns = {
         "ZPL 2.1",
         "BSD 3-Clause",
         "BSD 3-Clause License",
+    ],
+    "MIT" : [
+        "http://www.opensource.org/licenses/mit-license.php",
     ],
 }
 license_syns_reverse = {}
@@ -53,16 +58,38 @@ def _ensure_len(text, max_len):
     return text
 
 
-def _get_license_or_copyright(o):
-    copyright = o.get("copyrighttext", "NOT KNOWN")
-    license = o.get("licenseconcluded", "NOT KNOWN")
-    if license == "NOT KNOWN" and copyright != "NOT KNOWN":
-        license = copyright
-    return license
+def _get_licenses(o):
+    possible_additional_info = None
+    package_name = o.get("name", "(package name missing)")
 
+    license_list = o.get("licenselist", None)
+    if license_list is not None and len(license_list) > 0:
+        license_list_simple = []
+        for l in license_list:
+            if not "license" in l:
+                continue
+            if "id" in l["license"]:
+                license_list_simple.append(l["license"]["id"])
+            elif "name" in l["license"]:
+                license_list_simple.append(l["license"]["name"])
+                continue
+            elif "text" in l["license"]:
+                license_list_simple.append(l["license"]["text"])
+                continue
+        if len(license_list_simple) > 0:
+            return license_list_simple
+
+    license = o.get("licenseconcluded", "NOT KNOWN")
+    if license == "NOT KNOWN":
+        print(f"Missing license: '{package_name}': '{o}'")
+    return [license]
+
+def _get_copyright(o):
+    name = o.get("name", "(package name missing)")
+    return o.get("copyrighttext", f"Not extracted, please search {name}")
 
 def generate_document(
-    format, sbom_parser, filename, outfile, include_license, debug=False
+    format, sbom_parser, filename, outfile, include_license, debug=False, additional_license_texts=None
 ):
     # Get constituent components of the SBOM
     packages = sbom_parser.get_packages()
@@ -75,11 +102,14 @@ def generate_document(
     def _find_license_id(value):
         """
         Uses the LicenseScanner and own synonyms.
-        Returns LicenseScanner.DEFAULT_LICENSE if nothing found.
+        Returns value if nothing found.
         """
         if value in license_syns_reverse:
             return license_syns_reverse[value]
-        return license_info.find_license_id(value)
+        found = license_info.find_license_id(value)
+        if found != license_info.DEFAULT_LICENSE:
+            return found
+        return value
 
     # Select document builder based on format
     if format == "markdown":
@@ -102,7 +132,7 @@ def generate_document(
     #         sbom_document.addrow(["Creator", f"{c[0]}:{c[1]}"])
 
     sbom_document.paragraph(
-        f"""SBOM File: {filename}
+        f"""SBOM File: {os.path.split(filename)[1]}
 SBOM Type: {document.get_type()}
 Version: {document.get_version()}
 Name: {document.get_name()}
@@ -120,11 +150,11 @@ Relationships: {str(len(relationships))}"""
     sbom_suppliers = []
 
     for package in packages:
-        license = _get_license_or_copyright(package)
-        sbom_licenses.append(license)
+        licenses = _get_licenses(package)
+        sbom_licenses.extend(licenses)
     for f in files:
-        license = _get_license_or_copyright(f)
-        sbom_licenses.append(license)
+        licenses = _get_licenses(f)
+        sbom_licenses.extend(licenses)
 
     freq = {}
     for items in sorted(sbom_licenses):
@@ -134,11 +164,13 @@ Relationships: {str(len(relationships))}"""
         freq_sorted = [(f, license) for license, f in freq.items()]
         freq_sorted = sorted(freq_sorted, key=lambda x: x[0], reverse=True)
         print("License information:")
-        for f, license in freq_sorted:
-            print(f"{f} times: {_ensure_len(license, 200)} END")
+        for f, licenses in freq_sorted:
+            print(f"{f} times: {_ensure_len(licenses, 200)} END")
 
     licenses_by_id = {}
     for k in freq.keys():
+        if k is None or k == "NOT KNOWN":
+            continue
         k = str(k)
         license_text = None
         if len(k) > 200 and "\n" in k:
@@ -146,10 +178,10 @@ Relationships: {str(len(relationships))}"""
             license_text = k
 
         elif license_info.license_expression(k):
-            print(f"WARNING: License expression found, not really supported: {k}")
+            print(f"WARNING: License expression found, not fully supported: {k}")
 
         resolved = _find_license_id(k)
-        if license_info.DEFAULT_LICENSE != resolved and resolved != k:
+        if resolved != k:
             if debug:
                 print(f"Resolved {_ensure_len(k, 20)} with {resolved}")
             k = resolved
@@ -208,17 +240,20 @@ Relationships: {str(len(relationships))}"""
                 continue
 
             license_url = f"https://spdx.org/licenses/{key_stripped}.json"
+            license_done = False
             try:
                 license_text = requests.get(license_url).json()
-                if license_text.get("licenseText") is None:
-                    print(
-                        f"No license text found for {key_stripped}: "
-                        "None value for licenseText"
-                    )
-                else:
+                if license_text.get("licenseText") is not None:
                     value["license_text"] = license_text.get("licenseText")
+                    license_done = True
             except requests.exceptions.RequestException:
                 print(f"No license text found for {key_stripped}: RequestException")
+
+            if not license_done:
+                if additional_license_texts is not None and key_stripped.upper() in additional_license_texts:
+                        value["license_text"] = additional_license_texts[key_stripped.upper()]
+                else:
+                    print(f"No license text found for {key_stripped}")
 
     if len(packages) > 0:
 
@@ -233,8 +268,10 @@ Relationships: {str(len(relationships))}"""
             version = package.get("version", None)
             type = package.get("type", None)
             supplier = package.get("supplier", None)
-            license = _get_license_or_copyright(package)
-            license_id = _find_license_id(license)
+            licenses = _get_licenses(package)
+            licenses = [_find_license_id(l) for l in licenses]
+            licenses_multiline = '\n'.join(licenses)
+
             sbom_components.append(type)
             if supplier is not None:
                 sbom_suppliers.append(supplier)
@@ -245,20 +282,13 @@ Relationships: {str(len(relationships))}"""
 Name: {name}
 Version: {version}
 Type: {type}
-License id: {_ensure_len(license_id, 50)}
+License id(s) or text: {licenses_multiline}
 """
             )
-            if include_license:
-                sbom_document.paragraph("License:")
-                paragraph_text = f"No license text for id {license_id}"
-                if (
-                    license_id in licenses_by_id
-                    and "license_text" in licenses_by_id[license_id]
-                ):
-                    license_text = licenses_by_id[license_id]["license_text"]
-                    if license_text is not None:
-                        paragraph_text = license_text
-                sbom_document.paragraph(paragraph_text)
+            copyright = _get_copyright(package)
+            if copyright is not None and copyright != "NOT KNOWN":
+                sbom_document.paragraph(f"Copyright:")
+                sbom_document.paragraph(copyright)
 
             if (
                 id is None
@@ -268,6 +298,24 @@ License id: {_ensure_len(license_id, 50)}
                 or supplier == "NOASSERTION"
             ):
                 packages_valid = False
+
+    if include_license:
+        sbom_document.heading(1, "License texts")
+
+        licenses = list(licenses_by_id.values())
+        licenses = sorted(licenses, key=lambda d: d["id"])
+        for l in licenses:
+            limited_length_id = _ensure_len(l["id"], 50)
+            sbom_document.heading(2, limited_length_id)
+            sbom_document.paragraph("License:")
+            paragraph_text = f"No license text for id {l['id']}"
+            if "license_text" in l:
+                license_text = l["license_text"]
+                if license_text is not None:
+                    paragraph_text = license_text
+            elif l["id"] not in ["", "NOASSERTION", "UNKNOWN"]:
+                paragraph_text = l["id"]
+            sbom_document.paragraph(paragraph_text)
 
     sbom_document.heading(1, "Component Type Summary")
     sbom_document.createtable(["Type", "Count"], [20, 10])

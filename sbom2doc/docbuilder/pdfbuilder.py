@@ -106,16 +106,29 @@ class PDFBuilder(DocBuilder):
                 )
             else:
                 self.contents.append(
-                    Paragraph(str(self.headingnumber[level-1]) + "." + str(self.headingnumber[level]) + ". " + title, self.h1)
+                    Paragraph(
+                        str(self.headingnumber[level - 1])
+                        + "."
+                        + str(self.headingnumber[level])
+                        + ". "
+                        + title,
+                        self.h1,
+                    )
                 )
         else:
             self.contents.append(Paragraph(title, self.h1))
         self._spacer()
 
-    def paragraph(self, text):
-        # Line breaks preserved if required
+    def paragraph(self, text, replace_angled_brackets=True):
+        """
+        Line breaks preserved if required, and < > are escaped by default since
+        reportlab is using them for markup.
+        """
         text_elements = text.splitlines()
         for t in text_elements:
+            if replace_angled_brackets:
+                t = t.replace("<", "&lt;")
+                t = t.replace(">", "&gt;")
             self.contents.append(Paragraph(t, self.body))
             self._spacer()
 
