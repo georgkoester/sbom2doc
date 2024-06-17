@@ -1,4 +1,4 @@
-lib4sbom >= 0.5.3
+lib4sbom @ git+https://github.com/georgkoester/lib4sbom@multi-license
 rich
 reportlab
 packageurl-python
