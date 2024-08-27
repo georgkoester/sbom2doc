@@ -3,6 +3,7 @@
 
 import requests
 import os
+import datetime
 from lib4sbom.data.document import SBOMDocument
 from lib4sbom.license import LicenseScanner
 
@@ -10,7 +11,6 @@ from sbom2doc.docbuilder.consolebuilder import ConsoleBuilder
 from sbom2doc.docbuilder.jsonbuilder import JSONBuilder
 from sbom2doc.docbuilder.markdownbuilder import MarkdownBuilder
 from sbom2doc.docbuilder.pdfbuilder import PDFBuilder
-
 
 license_syns = {
     "Apache-2.0": [
@@ -28,15 +28,18 @@ license_syns = {
         "https://opensource.org/licenses/BSD-3-Clause",
         "3-Clause BSD License",
         "http://www.eclipse.org/org/documents/edl-v10.php",
+        "BSD 3-Clause",
+        "BSD 3-Clause License",
     ],
     "BSD-2-Clause": [
         "https://opensource.org/licenses/BSD-2-Clause",
         "https://opensource.org/licenses/BSD-2-Clause;description=BSD 2-Clause License",
     ],
+    "CDDL-1.1": [
+        "https://github.com/javaee/activation/blob/master/LICENSE.txt",
+    ],
     "ZPL-2.1": [
         "ZPL 2.1",
-        "BSD 3-Clause",
-        "BSD 3-Clause License",
     ],
     "MIT" : [
         "http://www.opensource.org/licenses/mit-license.php",
@@ -47,6 +50,10 @@ for k, v in license_syns.items():
     for kk in v:
         license_syns_reverse[kk] = k
 
+
+copyright_info_missing_package_name_list = {}
+unknown_license_text_id_list = {}
+license_info_missing_package_id_list = {}
 
 def _ensure_len(text, max_len):
     if max_len < 3:
@@ -82,11 +89,16 @@ def _get_licenses(o):
     license = o.get("licenseconcluded", "NOT KNOWN")
     if license == "NOT KNOWN":
         print(f"Missing license: '{package_name}': '{o}'")
+        license_info_missing_package_id_list[package_name] = True
     return [license]
 
 def _get_copyright(o):
     name = o.get("name", "(package name missing)")
-    return o.get("copyrighttext", f"Not extracted, please search {name}")
+    failed_text = f"Not extracted, please search {name}"
+    result = o.get("copyrighttext", failed_text)
+    if failed_text == result:
+        copyright_info_missing_package_name_list[name] = True
+    return result
 
 def generate_document(
     format, sbom_parser, filename, outfile, include_license, debug=False, additional_license_texts=None
@@ -305,6 +317,8 @@ License id(s) or text: {licenses_multiline}
         licenses = list(licenses_by_id.values())
         licenses = sorted(licenses, key=lambda d: d["id"])
         for l in licenses:
+            if l["id"] in ["UNKNOWN", "NOASSERTION", ""]:
+                continue
             limited_length_id = _ensure_len(l["id"], 50)
             sbom_document.heading(2, limited_length_id)
             sbom_document.paragraph("License:")
@@ -313,8 +327,9 @@ License id(s) or text: {licenses_multiline}
                 license_text = l["license_text"]
                 if license_text is not None:
                     paragraph_text = license_text
-            elif l["id"] not in ["", "NOASSERTION", "UNKNOWN"]:
-                paragraph_text = l["id"]
+                else:
+                    unknown_license_text_id_list[l['id']] = True
+
             sbom_document.paragraph(paragraph_text, style=sbom_document.small_body)
 
     sbom_document.heading(1, "Component Type Summary")
@@ -347,3 +362,33 @@ License id(s) or text: {licenses_multiline}
     # sbom_document.paragraph(f"NTIA conformant {valid_sbom}")
 
     sbom_document.publish(outfile)
+
+    if debug:
+        timestamp = datetime.datetime.now().isoformat().replace(":", "")
+        timestamp = timestamp[:timestamp.find(".")]
+        if len(license_info_missing_package_id_list) > 0:
+            lines = ['"package id","license id"' + os.linesep]
+            lines.extend([f'"{k}",""{os.linesep}' for k in license_info_missing_package_id_list])
+
+            missing_license_info_filename = f"packages_missing_license_info-{timestamp}.csv"
+            print(f"Writing {missing_license_info_filename}")
+            with open(missing_license_info_filename, "x", encoding='utf-8'  ) as missing_license_info_file:
+                    missing_license_info_file.writelines(lines)
+
+        if len(copyright_info_missing_package_name_list) > 0:
+            lines = ['"package id","copyright info"' + os.linesep]
+            lines.extend([f'"{k}",""{os.linesep}' for k in copyright_info_missing_package_name_list])
+
+            missing_copyright_info_filename = f"packages_missing_copyright_info-{timestamp}.csv"
+            print(f"Writing {missing_copyright_info_filename}")
+            with open(missing_copyright_info_filename, "x", encoding='utf-8') as missing_copyright_info_file:
+                    missing_copyright_info_file.writelines(lines)
+
+        if len(unknown_license_text_id_list) > 0:
+            lines = ['"license id","original id synonym","license text"' + os.linesep]
+            lines.extend([f'"{k}","",""{os.linesep}' for k in unknown_license_text_id_list])
+
+            unknown_license_text_filename = f"license_ids_missing_text-{timestamp}.csv"
+            print(f"Writing {unknown_license_text_filename}")
+            with open(unknown_license_text_filename, "x", encoding='utf-8') as unknown_license_text_file:
+                    unknown_license_text_file.writelines(lines)
