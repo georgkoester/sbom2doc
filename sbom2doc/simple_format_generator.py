@@ -73,16 +73,13 @@ def _get_licenses(o):
     if license_list is not None and len(license_list) > 0:
         license_list_simple = []
         for l in license_list:
-            if not "license" in l:
-                continue
-            if "id" in l["license"]:
-                license_list_simple.append(l["license"]["id"])
-            elif "name" in l["license"]:
-                license_list_simple.append(l["license"]["name"])
-                continue
-            elif "text" in l["license"]:
-                license_list_simple.append(l["license"]["text"])
-                continue
+            if "id" in l:
+                license_list_simple.append(l["id"])
+            elif "name" in l:
+                license_list_simple.append(l["name"])
+            elif "text" in l:
+                license_list_simple.append(l["text"])
+
         if len(license_list_simple) > 0:
             return license_list_simple
 
