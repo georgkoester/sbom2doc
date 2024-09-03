@@ -27,6 +27,7 @@ license_syns = {
         "The Apache Software License, Version 2.0",
         "http://www.apache.org/licenses/LICENSE-2.0, https://www.eclipse.org/org/documents/epl-v10.php",
         "http://www.wtfpl.net/, http://www.apache.org/licenses/LICENSE-2.0.txt",
+        "Apache-2.0,",
     ],
     "BSD-3-Clause": [
         "https://opensource.org/licenses/BSD-3-Clause",
@@ -36,27 +37,32 @@ license_syns = {
         "BSD 3-Clause License",
         "BSD-3-clause-intel",
         "new BSD",
+        "BSD",
+        "BSD, Public Domain",
+        "BSD-like",
         "same-as-rest-of-p11kit",
     ],
     "BSD-2-Clause": [
         "https://opensource.org/licenses/BSD-2-Clause",
         "https://opensource.org/licenses/BSD-2-Clause;description=BSD 2-Clause License",
     ],
-    "BSD": [
-        "BSD, Public Domain",
-        "BSD-like"
-    ],
     "BSD-1-Clause": [
         "The BSD License"
     ],
     "CDDL-1.1": [
         "https://github.com/javaee/activation/blob/master/LICENSE.txt",
+        "https://github.com/javaee/javax.annotation/blob/master/LICENSE",
+    ],
+    "EPL-2.0": [
+      "http://www.eclipse.org/legal/epl-2.0, https://www.gnu.org/software/classpath/license.html",
     ],
     "ZPL-2.1": [
         "ZPL 2.1",
     ],
     "MIT" : [
         "http://www.opensource.org/licenses/mit-license.php",
+        "MIT OR Apache-2.0",
+        "Expat (MIT/X11)"
     ],
     "FSFAP": [
         "GNU-All-Permissive-License-FSF"
@@ -75,19 +81,22 @@ license_syns = {
         "GFDL",
         "GFDL-NIV-1.3+"
     ],
-    "GPL": [
-        "GPL-unspecified"
-    ],
-    "GPL-2": [
-        "TCL-like"
-    ],
     "GPL-2.0-only": [
       "GNU GPL"
     ],
+    "GPL-2.0-only WITH Classpath-exception-2.0": [
+        "GPL-2.0 WITH Classpath-exception-2.0",
+    ],
     "GPL-2.0-or-later": [
+        "GPL",
+        "GPL-unspecified",
+    ],
+    "GPL-2.0-or-later WITH Classpath-exception-2.0": [
+        "GPL-2.0 WITH Classpath-exception-2.0",
         "http://www.eclipse.org/legal/epl-2.0, https://www.gnu.org/software/classpath/license.html, http://www.apache.org/licenses/LICENSE-2.0.html, https://asm.ow2.io/license.html",
         "http://www.eclipse.org/legal/epl-2.0, https://www.gnu.org/software/classpath/license.html, http://www.apache.org/licenses/LICENSE-2.0.html, https://creativecommons.org/publicdomain/zero/1.0/",
-        "http://www.eclipse.org/legal/epl-2.0, https://www.gnu.org/software/classpath/license.html, http://www.eclipse.org/org/documents/edl-v10.php, https://opensource.org/licenses/BSD-2-Clause, http://www.apache.org/licenses/LICENSE-2.0.html, https://creativecommons.org/publicdomain/zero/1.0/, https://asm.ow2.io/license.html, jquery.org/license, http://www.opensource.org/licenses/mit-license.php, https://www.w3.org/Consortium/Legal/copyright-documents-19990405"
+        "http://www.eclipse.org/legal/epl-2.0, https://www.gnu.org/software/classpath/license.html, http://www.eclipse.org/org/documents/edl-v10.php, https://opensource.org/licenses/BSD-2-Clause, http://www.apache.org/licenses/LICENSE-2.0.html, https://creativecommons.org/publicdomain/zero/1.0/, https://asm.ow2.io/license.html, jquery.org/license, http://www.opensource.org/licenses/mit-license.php, https://www.w3.org/Consortium/Legal/copyright-documents-19990405",
+        "http://www.eclipse.org/legal/epl-2.0, https://www.gnu.org/software/classpath/license.html",
     ],
     "LGPL-2.1-only": [
         "GNU LGPL",
@@ -98,11 +107,8 @@ license_syns = {
         "LGPL-2.1+~OpenSSL"
     ],
     "LGPL-3.0-or-later": [
-      "LGPLv3+_or_GPLv2+"
-    ],
-    "MIT": [
-        "MIT OR Apache-2.0",
-        "Expat (MIT/X11)"
+      "LGPLv3+_or_GPLv2+",
+      "LGPL-",
     ],
     "REGCOMP": [
       "REGCOMP,"
@@ -111,7 +117,8 @@ license_syns = {
         "Python Software Foundation License"
     ],
     "Public-domain": [
-        "Public-Domain"
+        "Public-Domain",
+        "Iconv-PD",
     ],
     "SGI-B-2.0": [
         "SGI"
@@ -126,7 +133,7 @@ license_syns = {
 license_syns_reverse = {}
 for k, v in license_syns.items():
     for kk in v:
-        license_syns_reverse[kk] = k
+        license_syns_reverse[kk.strip()] = k.strip()
 
 
 copyright_info_missing_package_name_list = {}
@@ -163,7 +170,6 @@ def _get_licenses(o):
 
     license = o.get("licenseconcluded", "NOT KNOWN")
     if license == "NOT KNOWN":
-        print(f"Missing license: '{package_name}': '{o}'")
         license_info_missing_package_id_list[package_name] = True
     return [license]
 
@@ -258,7 +264,7 @@ Relationships: {str(len(relationships))}"""
     for k in freq.keys():
         if k is None or k == "NOT KNOWN":
             continue
-        k = str(k)
+        k = str(k).strip()
         license_text = None
         if len(k) > 200 and "\n" in k:
             # just assume that it is the license_text at this length with newlines
@@ -301,17 +307,20 @@ Relationships: {str(len(relationships))}"""
                 continue
             if value["license_text"] is not None:
                 continue  # has text already
+
+            query_license_site = True
             if len(key) > 200:
                 if debug:
                     print(
                         "Ignore long license key when getting texts, "
                         f"length: {len(key)}"
                     )
-                continue
+                query_license_site = False
+
             if license_info.license_expression(key):
                 if debug:
                     print(f"Ignore license expression when getting text: {key}")
-                continue
+                query_license_site = False
 
             key_stripped = key.strip()
             if " " in key_stripped:
@@ -320,21 +329,23 @@ Relationships: {str(len(relationships))}"""
                         "Ignore license id with space when "
                         f"querying spdx text: {key_stripped}"
                     )
-                continue
+                query_license_site = False
 
             if key_stripped.startswith("http"):
                 # assume URL, ignore
-                continue
+                query_license_site = False
 
-            license_url = f"https://spdx.org/licenses/{key_stripped}.json"
+
             license_done = False
-            try:
-                license_text = requests.get(license_url).json()
-                if license_text.get("licenseText") is not None:
-                    value["license_text"] = license_text.get("licenseText")
-                    license_done = True
-            except requests.exceptions.RequestException:
-                print(f"No license text found in SPDX db for {key_stripped}: RequestException")
+            if query_license_site:
+                license_url = f"https://spdx.org/licenses/{key_stripped}.json"
+                try:
+                    license_text = requests.get(license_url).json()
+                    if license_text.get("licenseText") is not None:
+                        value["license_text"] = license_text.get("licenseText")
+                        license_done = True
+                except requests.exceptions.RequestException:
+                    print(f"No license text found in SPDX db for {key_stripped}: RequestException")
 
             if not license_done:
                 if additional_license_texts is not None and key_stripped.upper() in additional_license_texts:
