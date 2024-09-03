@@ -43,7 +43,8 @@ license_syns = {
         "https://opensource.org/licenses/BSD-2-Clause;description=BSD 2-Clause License",
     ],
     "BSD": [
-        "BSD, Public Domain"
+        "BSD, Public Domain",
+        "BSD-like"
     ],
     "BSD-1-Clause": [
         "The BSD License"
@@ -70,7 +71,8 @@ license_syns = {
         "GFDL-3",
         "GFDL-NIV-1.3"
     ],
-    "GFDL-1.3-or-later\t": [
+    "GFDL-1.3-or-later": [
+        "GFDL",
         "GFDL-NIV-1.3+"
     ],
     "GPL": [
@@ -79,19 +81,31 @@ license_syns = {
     "GPL-2": [
         "TCL-like"
     ],
+    "GPL-2.0-only": [
+      "GNU GPL"
+    ],
     "GPL-2.0-or-later": [
         "http://www.eclipse.org/legal/epl-2.0, https://www.gnu.org/software/classpath/license.html, http://www.apache.org/licenses/LICENSE-2.0.html, https://asm.ow2.io/license.html",
         "http://www.eclipse.org/legal/epl-2.0, https://www.gnu.org/software/classpath/license.html, http://www.apache.org/licenses/LICENSE-2.0.html, https://creativecommons.org/publicdomain/zero/1.0/",
         "http://www.eclipse.org/legal/epl-2.0, https://www.gnu.org/software/classpath/license.html, http://www.eclipse.org/org/documents/edl-v10.php, https://opensource.org/licenses/BSD-2-Clause, http://www.apache.org/licenses/LICENSE-2.0.html, https://creativecommons.org/publicdomain/zero/1.0/, https://asm.ow2.io/license.html, jquery.org/license, http://www.opensource.org/licenses/mit-license.php, https://www.w3.org/Consortium/Legal/copyright-documents-19990405"
     ],
     "LGPL-2.1-only": [
+        "GNU LGPL",
         "http://www.mozilla.org/MPL/MPL-1.1.html, http://www.gnu.org/licenses/lgpl-2.1.html, https://www.apache.org/licenses/LICENSE-2.0"
     ],
     "LGPL-2.1-or-later": [
-        "LPGL-2.1+"
+        "LPGL-2.1+",
+        "LGPL-2.1+~OpenSSL"
+    ],
+    "LGPL-3.0-or-later": [
+      "LGPLv3+_or_GPLv2+"
     ],
     "MIT": [
-        "MIT OR Apache-2.0"
+        "MIT OR Apache-2.0",
+        "Expat (MIT/X11)"
+    ],
+    "REGCOMP": [
+      "REGCOMP,"
     ],
     "PSF-2.0": [
         "Python Software Foundation License"
