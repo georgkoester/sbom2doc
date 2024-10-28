@@ -6,6 +6,7 @@ import os
 import datetime
 from lib4sbom.data.document import SBOMDocument
 from lib4sbom.license import LicenseScanner
+import csv
 
 from sbom2doc.docbuilder.consolebuilder import ConsoleBuilder
 from sbom2doc.docbuilder.jsonbuilder import JSONBuilder
@@ -139,6 +140,7 @@ for k, v in license_syns.items():
 copyright_info_missing_package_name_list = {}
 unknown_license_text_id_list = {}
 license_info_missing_package_id_list = {}
+complete_copyright_and_license_info_list = {}
 
 def _ensure_len(text, max_len):
     if max_len < 3:
@@ -370,6 +372,15 @@ Relationships: {str(len(relationships))}"""
             licenses = [_find_license_id(l) for l in licenses]
             licenses_multiline = '\n'.join(licenses)
 
+            properties = {prop[0]: prop[1] for prop in package.get("property", [])}
+
+            main_copyright = "See copyright"
+            if "main-copyright" in properties:
+                main_copyright = properties["main-copyright"]
+            main_license_id = "See license ids"
+            if "main-license-ids" in properties:
+                main_license_id = properties["main-license-ids"]
+
             sbom_components.append(type)
             if supplier is not None:
                 sbom_suppliers.append(supplier)
@@ -380,6 +391,8 @@ Relationships: {str(len(relationships))}"""
 Name: {name}
 Version: {version}
 Type: {type}
+Main copyright: {main_copyright}
+Main licensing: {main_license_id}
 License id(s) or text: {licenses_multiline}
 """
             )
@@ -387,6 +400,19 @@ License id(s) or text: {licenses_multiline}
             if copyright is not None and copyright != "NOT KNOWN":
                 sbom_document.paragraph(f"Copyright:")
                 sbom_document.paragraph(copyright, style=sbom_document.small_body)
+
+            if name in complete_copyright_and_license_info_list:
+                print(f"Warning: Duplicate package {name}! Dropping {package}"
+                      " when writing debug files with copyright and license info")
+            else:
+                complete_copyright_and_license_info_list[name] = {
+                    "name": name,
+                    "version": version,
+                    "licenses": licenses,
+                    "main_license_id": main_license_id,
+                    "main_copyright": main_copyright,
+                    "copyright_long": copyright
+                }
 
             if (
                 id is None
@@ -478,3 +504,22 @@ License id(s) or text: {licenses_multiline}
             print(f"Writing {unknown_license_text_filename}")
             with open(unknown_license_text_filename, "x", encoding='utf-8') as unknown_license_text_file:
                     unknown_license_text_file.writelines(lines)
+
+        if len(complete_copyright_and_license_info_list) > 0:
+            fields = ["name","version","licenses","main licenses","main copyright","copyright long"]
+
+            complete_copyright_and_licenses_info_filename = f"complete_copyright_and_licenses_infos-{timestamp}.csv"
+            print(f"Writing {complete_copyright_and_licenses_info_filename}")
+            with open(complete_copyright_and_licenses_info_filename, "x", encoding='utf-8') as complete_copyright_and_licenses_info_file:
+                    writer = csv.DictWriter(complete_copyright_and_licenses_info_file, fieldnames=fields)
+                    writer.writeheader()
+                    for k in complete_copyright_and_license_info_list.values():
+                        row = {
+                            "name": k["name"],
+                            "version": k["version"],
+                            "licenses": k["licenses"],
+                            "main licenses": k["main_license_id"],
+                            "main copyright": k["main_copyright"],
+                            "copyright long": k["copyright_long"],
+                        }
+                        writer.writerow(row)
