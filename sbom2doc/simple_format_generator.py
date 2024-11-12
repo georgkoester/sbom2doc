@@ -370,7 +370,6 @@ Relationships: {str(len(relationships))}"""
             supplier = package.get("supplier", None)
             licenses = _get_licenses(package)
             licenses = [_find_license_id(l) for l in licenses]
-            licenses_multiline = '\n'.join(licenses)
 
             properties = {prop[0]: prop[1] for prop in package.get("property", [])}
 
@@ -393,7 +392,6 @@ Version: {version}
 Type: {type}
 Main copyright: {main_copyright}
 Main licensing: {main_license_id}
-License id(s) or text: {licenses_multiline}
 """
             )
             copyright = _get_copyright(package)
