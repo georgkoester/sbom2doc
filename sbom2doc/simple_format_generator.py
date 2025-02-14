@@ -13,6 +13,13 @@ from sbom2doc.docbuilder.jsonbuilder import JSONBuilder
 from sbom2doc.docbuilder.markdownbuilder import MarkdownBuilder
 from sbom2doc.docbuilder.pdfbuilder import PDFBuilder
 
+"""Customer is asking for leaving out some false positives."""
+license_false_positives = {
+    "debian-packages-licensed-separately": 1,
+    "ubuntu-packages-licensed-separately": 1,
+    "DONT-CHANGE-THE-GPL": 1
+}
+
 license_syns = {
     "Apache-2.0": [
         "https://www.apache.org/licenses/LICENSE-2.0;description=Apache-2.0",
@@ -370,6 +377,7 @@ Relationships: {str(len(relationships))}"""
             supplier = package.get("supplier", None)
             licenses = _get_licenses(package)
             licenses = [_find_license_id(l) for l in licenses]
+            licenses = [l for l in licenses if l not in license_false_positives]
 
             properties = {prop[0]: prop[1] for prop in package.get("property", [])}
 
@@ -395,9 +403,9 @@ Main licensing: {main_license_id}
 """
             )
             copyright = _get_copyright(package)
-            if copyright is not None and copyright != "NOT KNOWN":
-                sbom_document.paragraph(f"Copyright:")
-                sbom_document.paragraph(copyright, style=sbom_document.small_body)
+            #if copyright is not None and copyright != "NOT KNOWN":
+            #    sbom_document.paragraph(f"Copyright:")
+            #    sbom_document.paragraph(copyright, style=sbom_document.small_body)
 
             if name in complete_copyright_and_license_info_list:
                 print(f"Warning: Duplicate package {name}! Dropping {package}"
@@ -428,6 +436,8 @@ Main licensing: {main_license_id}
         licenses = sorted(licenses, key=lambda d: d["id"])
         for l in licenses:
             if l["id"] in ["UNKNOWN", "NOASSERTION", ""]:
+                continue
+            if l["id"] in license_false_positives:
                 continue
             limited_length_id = _ensure_len(l["id"], 50)
             sbom_document.heading(2, limited_length_id)
